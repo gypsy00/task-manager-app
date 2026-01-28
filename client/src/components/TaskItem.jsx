@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import './Tasks.css';
 
-const TaskItem = ({ task, onStatusChange, onDelete, onEdit }) => {
+const TaskItem = ({ task, onStatusChange, onDelete, onEdit, isDragging }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
     title: task.title,
@@ -92,7 +92,7 @@ const TaskItem = ({ task, onStatusChange, onDelete, onEdit }) => {
   }
 
   return (
-    <div className={`task-item task-${task.status}`}>
+    <div className={`task-item task-${task.status}${isDragging ? ' task-dragging' : ''}`}>
       <div className="task-content">
         <h3 className="task-title">{task.title}</h3>
         {task.description && (

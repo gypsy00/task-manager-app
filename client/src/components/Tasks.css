@@ -293,6 +293,8 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   border-left: 4px solid #e0e0e0;
   transition: all 0.2s;
+  cursor: grab;
+  touch-action: none;
 }
 
 .task-item:hover {
@@ -552,4 +554,58 @@
 .error-dismiss:hover {
   background: #c00;
   color: white;
+}
+
+/* Drag and Drop Styles */
+.drag-hint {
+  font-size: 13px;
+  color: #777;
+  font-style: italic;
+}
+
+.droppable-area {
+  min-height: 100px;
+  transition: background-color 0.2s;
+}
+
+.empty-column {
+  padding: 24px;
+  text-align: center;
+  color: #aaa;
+  font-size: 14px;
+  border: 2px dashed #e0e0e0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Task Dragging State */
+.task-item:active {
+  cursor: grabbing;
+}
+
+.task-dragging {
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+  transform: rotate(2deg) scale(1.02);
+  border-left-color: #667eea;
+  background: white;
+  z-index: 1000;
+}
+
+/* Drag Overlay Styling */
+[data-dnd-overlay] .task-item {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  transform: rotate(3deg);
+  opacity: 0.95;
+}
+
+/* Smooth reordering animation */
+.task-list > div {
+  transition: transform 0.2s ease;
+}
+
+@media (max-width: 768px) {
+  .drag-hint {
+    text-align: center;
+    width: 100%;
+  }
 }

@@ -1,6 +1,21 @@
 import { useState, useEffect } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { tasksAPI } from '../services/api';
 import TaskItem from './TaskItem';
+import SortableTaskItem from './SortableTaskItem';
 import TaskForm from './TaskForm';
 import './Tasks.css';
 
@@ -10,7 +25,18 @@ const TaskList = () => {
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState('all');
-  const [viewMode, setViewMode] = useState('board'); // 'board' or 'list'
+  const [activeTask, setActiveTask] = useState(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const fetchTasks = async () => {
     try {
@@ -77,16 +103,141 @@ const TaskList = () => {
     }
   };
 
+  const getTasksByStatus = (status) => {
+    return tasks
+      .filter(task => task.status === status)
+      .sort((a, b) => a.position - b.position);
+  };
+
+  const findContainer = (id) => {
+    if (['todo', 'in-progress', 'done'].includes(id)) {
+      return id;
+    }
+    const task = tasks.find(t => t._id === id);
+    return task?.status;
+  };
+
+  const handleDragStart = (event) => {
+    const { active } = event;
+    const task = tasks.find(t => t._id === active.id);
+    setActiveTask(task);
+  };
+
+  const handleDragOver = (event) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id;
+    const overId = over.id;
+
+    const activeContainer = findContainer(activeId);
+    const overContainer = findContainer(overId);
+
+    if (!activeContainer || !overContainer || activeContainer === overContainer) {
+      return;
+    }
+
+    // Moving to a different column
+    setTasks((prev) => {
+      const activeTask = prev.find(t => t._id === activeId);
+      if (!activeTask) return prev;
+
+      return prev.map(task => {
+        if (task._id === activeId) {
+          return { ...task, status: overContainer };
+        }
+        return task;
+      });
+    });
+  };
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    setActiveTask(null);
+
+    if (!over) return;
+
+    const activeId = active.id;
+    const overId = over.id;
+
+    const activeContainer = findContainer(activeId);
+    const overContainer = findContainer(overId);
+
+    if (!activeContainer || !overContainer) return;
+
+    // Get the tasks in the target column
+    const columnTasks = tasks
+      .filter(t => t.status === overContainer)
+      .sort((a, b) => a.position - b.position);
+
+    // Find the new position
+    let newPosition;
+    if (overId === overContainer) {
+      // Dropped on the column itself (at the end)
+      newPosition = columnTasks.length > 0
+        ? Math.max(...columnTasks.map(t => t.position)) + 1
+        : 0;
+    } else {
+      // Dropped on another task
+      const overIndex = columnTasks.findIndex(t => t._id === overId);
+      const activeIndex = columnTasks.findIndex(t => t._id === activeId);
+
+      if (activeIndex !== -1 && overIndex !== -1) {
+        // Reordering within the same column
+        newPosition = overIndex;
+      } else {
+        // Moving from another column
+        newPosition = overIndex >= 0 ? overIndex : columnTasks.length;
+      }
+    }
+
+    // Update positions for all tasks in the affected columns
+    const updatedTasks = tasks.map(task => {
+      if (task._id === activeId) {
+        return { ...task, status: overContainer, position: newPosition };
+      }
+      return task;
+    });
+
+    // Recalculate positions for the target column
+    const finalTasks = recalculatePositions(updatedTasks, overContainer, activeId, newPosition);
+    setTasks(finalTasks);
+
+    // Save to backend
+    try {
+      const tasksToUpdate = finalTasks
+        .filter(t => t.status === overContainer || t.status === activeContainer)
+        .map(t => ({ id: t._id, status: t.status, position: t.position }));
+
+      await tasksAPI.reorderTasks(tasksToUpdate);
+    } catch (err) {
+      setError('Failed to save task order');
+      fetchTasks(); // Revert on error
+    }
+  };
+
+  const recalculatePositions = (taskList, status, movedTaskId, targetPosition) => {
+    const columnTasks = taskList
+      .filter(t => t.status === status)
+      .sort((a, b) => {
+        if (a._id === movedTaskId) return targetPosition - b.position;
+        if (b._id === movedTaskId) return a.position - targetPosition;
+        return a.position - b.position;
+      });
+
+    return taskList.map(task => {
+      if (task.status === status) {
+        const index = columnTasks.findIndex(t => t._id === task._id);
+        return { ...task, position: index };
+      }
+      return task;
+    });
+  };
+
   // Filter tasks based on selected filter
   const filteredTasks = filter === 'all'
     ? tasks
     : tasks.filter(task => task.status === filter);
-
-  const tasksByStatus = {
-    'todo': filteredTasks.filter((t) => t.status === 'todo'),
-    'in-progress': filteredTasks.filter((t) => t.status === 'in-progress'),
-    'done': filteredTasks.filter((t) => t.status === 'done'),
-  };
 
   const taskCounts = {
     all: tasks.length,
@@ -106,6 +257,42 @@ const TaskList = () => {
     );
   }
 
+  const renderColumn = (status, title, dotClass) => {
+    const columnTasks = getTasksByStatus(status);
+    const showColumn = filter === 'all' || filter === status;
+
+    if (!showColumn) return null;
+
+    return (
+      <div className="task-column" key={status}>
+        <h3 className="column-title">
+          <span className={`column-dot ${dotClass}`}></span>
+          {title} ({columnTasks.length})
+        </h3>
+        <SortableContext
+          items={columnTasks.map(t => t._id)}
+          strategy={verticalListSortingStrategy}
+          id={status}
+        >
+          <div className="task-list droppable-area" data-status={status}>
+            {columnTasks.map((task) => (
+              <SortableTaskItem
+                key={task._id}
+                task={task}
+                onStatusChange={handleStatusChange}
+                onDelete={handleDeleteTask}
+                onEdit={handleEditTask}
+              />
+            ))}
+            {columnTasks.length === 0 && (
+              <div className="empty-column">Drop tasks here</div>
+            )}
+          </div>
+        </SortableContext>
+      </div>
+    );
+  };
+
   return (
     <div className="tasks-container">
       <TaskForm onSubmit={handleCreateTask} loading={creating} />
@@ -119,7 +306,7 @@ const TaskList = () => {
         </div>
       )}
 
-      {/* Filter and View Controls */}
+      {/* Filter Controls */}
       <div className="tasks-controls">
         <div className="filter-tabs">
           <button
@@ -147,21 +334,8 @@ const TaskList = () => {
             Done <span className="count">{taskCounts.done}</span>
           </button>
         </div>
-        <div className="view-toggle">
-          <button
-            className={`view-button ${viewMode === 'board' ? 'active' : ''}`}
-            onClick={() => setViewMode('board')}
-            title="Board view"
-          >
-            Board
-          </button>
-          <button
-            className={`view-button ${viewMode === 'list' ? 'active' : ''}`}
-            onClick={() => setViewMode('list')}
-            title="List view"
-          >
-            List
-          </button>
+        <div className="drag-hint">
+          Drag tasks to reorder or move between columns
         </div>
       </div>
 
@@ -173,80 +347,32 @@ const TaskList = () => {
         <div className="empty-state">
           <p>No tasks match the selected filter.</p>
         </div>
-      ) : viewMode === 'board' ? (
-        <div className="tasks-grid">
-          {(filter === 'all' || filter === 'todo') && (
-            <div className="task-column">
-              <h3 className="column-title">
-                <span className="column-dot todo-dot"></span>
-                To Do ({tasksByStatus['todo'].length})
-              </h3>
-              <div className="task-list">
-                {tasksByStatus['todo'].map((task) => (
-                  <TaskItem
-                    key={task._id}
-                    task={task}
-                    onStatusChange={handleStatusChange}
-                    onDelete={handleDeleteTask}
-                    onEdit={handleEditTask}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {(filter === 'all' || filter === 'in-progress') && (
-            <div className="task-column">
-              <h3 className="column-title">
-                <span className="column-dot progress-dot"></span>
-                In Progress ({tasksByStatus['in-progress'].length})
-              </h3>
-              <div className="task-list">
-                {tasksByStatus['in-progress'].map((task) => (
-                  <TaskItem
-                    key={task._id}
-                    task={task}
-                    onStatusChange={handleStatusChange}
-                    onDelete={handleDeleteTask}
-                    onEdit={handleEditTask}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {(filter === 'all' || filter === 'done') && (
-            <div className="task-column">
-              <h3 className="column-title">
-                <span className="column-dot done-dot"></span>
-                Done ({tasksByStatus['done'].length})
-              </h3>
-              <div className="task-list">
-                {tasksByStatus['done'].map((task) => (
-                  <TaskItem
-                    key={task._id}
-                    task={task}
-                    onStatusChange={handleStatusChange}
-                    onDelete={handleDeleteTask}
-                    onEdit={handleEditTask}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       ) : (
-        <div className="tasks-list-view">
-          {filteredTasks.map((task) => (
-            <TaskItem
-              key={task._id}
-              task={task}
-              onStatusChange={handleStatusChange}
-              onDelete={handleDeleteTask}
-              onEdit={handleEditTask}
-            />
-          ))}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="tasks-grid">
+            {renderColumn('todo', 'To Do', 'todo-dot')}
+            {renderColumn('in-progress', 'In Progress', 'progress-dot')}
+            {renderColumn('done', 'Done', 'done-dot')}
+          </div>
+
+          <DragOverlay>
+            {activeTask ? (
+              <TaskItem
+                task={activeTask}
+                onStatusChange={() => {}}
+                onDelete={() => {}}
+                onEdit={() => {}}
+                isDragging
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
     </div>
   );

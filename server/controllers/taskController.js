@@ -5,7 +5,7 @@ const Task = require('../models/Task');
 // @access  Private
 const getTasks = async (req, res) => {
   try {
-    const tasks = await Task.find({ user: req.user._id }).sort({ createdAt: -1 });
+    const tasks = await Task.find({ user: req.user._id }).sort({ position: 1, createdAt: -1 });
     res.json(tasks);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -19,10 +19,19 @@ const createTask = async (req, res) => {
   try {
     const { title, description, status } = req.body;
 
+    // Get the highest position for this status
+    const highestTask = await Task.findOne({
+      user: req.user._id,
+      status: status || 'todo'
+    }).sort({ position: -1 });
+
+    const position = highestTask ? highestTask.position + 1 : 0;
+
     const task = await Task.create({
       title,
       description,
       status,
+      position,
       user: req.user._id
     });
 
@@ -41,7 +50,7 @@ const createTask = async (req, res) => {
 // @access  Private
 const updateTask = async (req, res) => {
   try {
-    const { title, description, status } = req.body;
+    const { title, description, status, position } = req.body;
 
     let task = await Task.findById(req.params.id);
 
@@ -54,9 +63,15 @@ const updateTask = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to update this task' });
     }
 
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (status !== undefined) updateData.status = status;
+    if (position !== undefined) updateData.position = position;
+
     task = await Task.findByIdAndUpdate(
       req.params.id,
-      { title, description, status },
+      updateData,
       { new: true, runValidators: true }
     );
 
@@ -67,6 +82,47 @@ const updateTask = async (req, res) => {
       return res.status(400).json({ message: messages[0] });
     }
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Reorder tasks (batch update positions)
+// @route   PUT /api/tasks/reorder
+// @access  Private
+const reorderTasks = async (req, res) => {
+  try {
+    const { tasks } = req.body; // Array of { id, status, position }
+
+    if (!Array.isArray(tasks)) {
+      return res.status(400).json({ message: 'Tasks array is required' });
+    }
+
+    // Update each task's position and status
+    const updatePromises = tasks.map(async ({ id, status, position }) => {
+      const task = await Task.findById(id);
+
+      if (!task) {
+        throw new Error(`Task ${id} not found`);
+      }
+
+      // Check ownership
+      if (task.user.toString() !== req.user._id.toString()) {
+        throw new Error('Not authorized to update this task');
+      }
+
+      return Task.findByIdAndUpdate(
+        id,
+        { status, position },
+        { new: true }
+      );
+    });
+
+    await Promise.all(updatePromises);
+
+    // Return all tasks with updated positions
+    const updatedTasks = await Task.find({ user: req.user._id }).sort({ position: 1, createdAt: -1 });
+    res.json(updatedTasks);
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
   }
 };
 
@@ -94,4 +150,4 @@ const deleteTask = async (req, res) => {
   }
 };
 
-module.exports = { getTasks, createTask, updateTask, deleteTask };
+module.exports = { getTasks, createTask, updateTask, reorderTasks, deleteTask };

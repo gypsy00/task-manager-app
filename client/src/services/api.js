@@ -34,6 +34,7 @@ export const tasksAPI = {
   getTasks: () => api.get('/tasks'),
   createTask: (taskData) => api.post('/tasks', taskData),
   updateTask: (id, taskData) => api.put(`/tasks/${id}`, taskData),
+  reorderTasks: (tasks) => api.put('/tasks/reorder', { tasks }),
   deleteTask: (id) => api.delete(`/tasks/${id}`),
 };
 
