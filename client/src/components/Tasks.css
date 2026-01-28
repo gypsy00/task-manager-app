@@ -100,11 +100,114 @@
   cursor: not-allowed;
 }
 
+/* Tasks Controls - Filter and View Toggle */
+.tasks-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.filter-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-tab {
+  padding: 8px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 20px;
+  background: white;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-tab:hover {
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.filter-tab.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
+  color: white;
+}
+
+.filter-tab .count {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.filter-tab.active .count {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.filter-todo.active {
+  background: #e74c3c;
+}
+
+.filter-progress.active {
+  background: #f39c12;
+}
+
+.filter-done.active {
+  background: #27ae60;
+}
+
+.view-toggle {
+  display: flex;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.view-button {
+  padding: 8px 16px;
+  border: none;
+  background: white;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-button:first-child {
+  border-right: 1px solid #e0e0e0;
+}
+
+.view-button:hover {
+  background: #f5f5f5;
+}
+
+.view-button.active {
+  background: #667eea;
+  color: white;
+}
+
 /* Tasks Grid */
 .tasks-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 24px;
+}
+
+/* List View */
+.tasks-list-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 @media (max-width: 1024px) {
@@ -124,6 +227,19 @@
 
   .form-select {
     min-width: auto;
+  }
+
+  .tasks-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-tabs {
+    justify-content: center;
+  }
+
+  .view-toggle {
+    align-self: center;
   }
 }
 
@@ -176,11 +292,12 @@
   padding: 16px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   border-left: 4px solid #e0e0e0;
-  transition: box-shadow 0.2s;
+  transition: all 0.2s;
 }
 
 .task-item:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
 }
 
 .task-todo {
@@ -216,6 +333,7 @@
   font-size: 14px;
   color: #666;
   word-break: break-word;
+  line-height: 1.5;
 }
 
 .task-meta {
@@ -243,6 +361,7 @@
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .status-select {
@@ -253,11 +372,27 @@
   background: white;
   cursor: pointer;
   flex: 1;
+  min-width: 100px;
 }
 
 .status-select:focus {
   outline: none;
   border-color: #667eea;
+}
+
+.edit-button {
+  padding: 6px 12px;
+  background: #e8f4fd;
+  color: #2196f3;
+  border: 1px solid #bbdefb;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.edit-button:hover {
+  background: #bbdefb;
 }
 
 .delete-button {
@@ -273,6 +408,88 @@
 
 .delete-button:hover {
   background: #fcc;
+}
+
+/* Task Edit Mode */
+.task-editing {
+  border-left-color: #667eea;
+}
+
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.edit-input {
+  padding: 10px 12px;
+  border: 2px solid #667eea;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.edit-input:focus {
+  outline: none;
+  border-color: #764ba2;
+}
+
+.edit-textarea {
+  padding: 10px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.edit-textarea:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.save-button {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.save-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.save-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.cancel-button {
+  padding: 8px 16px;
+  background: #f5f5f5;
+  color: #666;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.cancel-button:hover {
+  background: #e0e0e0;
 }
 
 /* Loading State */
