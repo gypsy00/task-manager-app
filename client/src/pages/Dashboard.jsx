@@ -1,5 +1,6 @@
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import TaskList from '../components/TaskList';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -24,14 +25,7 @@ const Dashboard = () => {
       </header>
 
       <main className="dashboard-main">
-        <div className="dashboard-content">
-          <h2>Your Dashboard</h2>
-          <p>You are successfully logged in!</p>
-          <div className="user-info">
-            <p><strong>Username:</strong> {user?.username}</p>
-            <p><strong>Email:</strong> {user?.email}</p>
-          </div>
-        </div>
+        <TaskList />
       </main>
     </div>
   );
